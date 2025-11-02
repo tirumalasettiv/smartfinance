@@ -1,59 +1,70 @@
 import streamlit as st
+import warnings
+warnings.filterwarnings("ignore")
 from authlib.integrations.requests_client import OAuth2Session
-
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# Load environment variables
+CLIENT_ID = os.getenv("client_id")
+CLIENT_SECRET = os.getenv("client_secret")
+REDIRECT_URI = "http://localhost:8501/oauth2callback"
+AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
 
-client_id = os.getenv("CLIENT_ID")
-client_secret = os.getenv("CLIENT_SECRET")
+# Initialize session state for authentication
+if "is_logged_in" not in st.session_state:
+    st.session_state["is_logged_in"] = False
+    st.session_state["user_name"] = None
+    st.session_state["token"] = None
 
-# Load secrets
-#client_id = st.secrets["CLIENT_ID"]
-#client_secret = st.secrets["CLIENT_SECRET"]
-redirect_uri = 'http://localhost:8501'  # Update if deploying to cloud
+# Function to display the login screen
+def login_screen():
+    
+    st.header("This app is private.")
+    st.subheader("Please log in.")
+    oauth = OAuth2Session(CLIENT_ID, CLIENT_SECRET, redirect_uri=REDIRECT_URI, scope="openid email profile")
+    auth_url, state = oauth.create_authorization_url(AUTH_URL)
+    st.session_state["oauth_state"] = state
+    st.markdown(f"[Log in with Google]({auth_url})")
 
-# OAuth endpoints
-authorize_url = "https://accounts.google.com/o/oauth2/v2/auth"
-token_url = "https://oauth2.googleapis.com/token"
-userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+# Handle OAuth2 callback
+def handle_callback():
+    
+    query_params = st.experimental_get_query_params()
+    st.write("Query Params:", query_params)  # Debugging
 
-# Initialize session
-if "token" not in st.session_state:
-    oauth = OAuth2Session(client_id, client_secret, redirect_uri=redirect_uri, scope="openid email profile")
-    auth_url, state = oauth.create_authorization_url(authorize_url)
-    st.markdown(f"[🔐 Login with Google]({auth_url})")
-    st.stop()
+    if "code" in query_params:
+        try:
+            oauth = OAuth2Session(CLIENT_ID, CLIENT_SECRET, redirect_uri=REDIRECT_URI)
+            authorization_response = REDIRECT_URI + "?" + "&".join([f"{k}={v[0]}" for k, v in query_params.items()])
+            st.write("Authorization Response URL:", authorization_response)  # Debugging
 
-# Fetch user info
-oauth = OAuth2Session(client_id, client_secret, redirect_uri=redirect_uri)
-token = st.session_state.get("token")
-if not token:
-    token = oauth.fetch_token(token_url, authorization_response=st.experimental_get_query_params())
-    st.session_state["token"] = token
+            token = oauth.fetch_token(
+                TOKEN_URL,
+                authorization_response=authorization_response,
+            )
+            st.session_state["token"] = token
+            user_info = oauth.get(USERINFO_URL, token=token).json()
+            st.session_state["is_logged_in"] = True
+            st.session_state["user_name"] = user_info.get("name", "Unknown User")
+            st.experimental_rerun()
+        except Exception as e:
+            st.error(f"Error during authentication: {e}")
+            st.stop()
 
-user_info = oauth.get(userinfo_url, token=token).json()
-email = user_info.get("email", "unknown")
-
-# Role-based access
-roles = {
-    "venkat@example.com": "admin",
-    "student@example.com": "user"
-}
-role = roles.get(email, "guest")
-
-# UI
-st.title("🔐 Streamlit Auth App")
-st.write(f"Welcome, **{email}**")
-st.write(f"Your role: **{role}**")
-
-if role == "admin":
-    st.success("✅ Admin Dashboard")
-    st.write("Here you can manage users, view analytics, and configure settings.")
-elif role == "user":
-    st.info("📊 User Dashboard")
-    st.write("Access your data, reports, and personalized content.")
+# Main app logic
+if not st.session_state["is_logged_in"]:
+    st.write("Session State:", st.session_state)  # Debugging
+    st.write("Query Params:", st.query_params)  # Debugging
+    if "code" in st.query_params:
+        handle_callback()
+    else:
+        login_screen()
 else:
-    st.warning("🚫 Guest Access")
-    st.write("Please contact admin to request access.")
+    st.header(f"Welcome, {st.session_state['user_name']}!")
+    if st.button("Log out"):
+        st.session_state["is_logged_in"] = False
+        st.session_state["user_name"] = None
+        st.session_state["token"] = None
+        st.experimental_rerun()
