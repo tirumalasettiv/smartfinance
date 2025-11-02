@@ -7,7 +7,7 @@ import os
 # Load environment variables
 CLIENT_ID = os.getenv("client_id")
 CLIENT_SECRET = os.getenv("client_secret")
-REDIRECT_URI = "http://localhost:8501/oauth2callback"
+REDIRECT_URI = "https://smartfinanceapp.streamlit.app/oauth2callback"
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v3/userinfo"
