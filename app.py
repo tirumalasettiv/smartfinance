@@ -59,6 +59,7 @@ if not st.session_state["is_logged_in"]:
     st.write("Query Params:", st.query_params)  # Debugging
     if "code" in st.query_params:
         handle_callback()
+        st.header(f"Welcome, {st.session_state['user_name']}!")
     else:
         login_screen()
 else:
